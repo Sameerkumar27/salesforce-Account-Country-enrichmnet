@@ -1,0 +1,127 @@
+
+@IsTest
+private class AccountEnrichmentTest {
+
+    @IsTest
+    static void testSuccessfulEnrichment() {
+        Test.setMock(HttpCalloutMock.class, new CountryApiMock(200));
+
+        Account acc = new Account(
+            Name = 'Success Test',
+            BillingCountry = 'India'
+        );
+
+        Test.startTest();
+        insert acc;
+        Test.stopTest();
+
+        Account result = [
+            SELECT Country_Capital__c, Country_Region__c,
+                   Country_Currency__c, Enrichment_Status__c
+            FROM Account
+            WHERE Id = :acc.Id
+        ];
+
+        System.assertEquals('New Delhi', result.Country_Capital__c);
+        System.assertEquals('Asia', result.Country_Region__c);
+        System.assertEquals('INR - Indian rupee', result.Country_Currency__c);
+        System.assertEquals('Success', result.Enrichment_Status__c);
+    }
+
+    @IsTest
+    static void testNotFoundEnrichment() {
+        Test.setMock(HttpCalloutMock.class, new CountryApiMock(404));
+
+        Account acc = new Account(
+            Name = 'Not Found Test',
+            BillingCountry = 'India'
+        );
+
+        Test.startTest();
+        insert acc;
+        Test.stopTest();
+
+        Account result = [
+            SELECT Country_Capital__c, Country_Region__c,
+                   Country_Currency__c, Enrichment_Status__c
+            FROM Account
+            WHERE Id = :acc.Id
+        ];
+
+        System.assertEquals('Failed', result.Enrichment_Status__c);
+    }
+
+    @IsTest
+    static void testServerErrorEnrichment() {
+        Test.setMock(HttpCalloutMock.class, new CountryApiMock(500));
+
+        Account acc = new Account(
+            Name = 'Server Error Test',
+            BillingCountry = 'India'
+        );
+
+        Test.startTest();
+        insert acc;
+        Test.stopTest();
+
+        Account result = [
+            SELECT Enrichment_Status__c
+            FROM Account
+            WHERE Id = :acc.Id
+        ];
+
+        System.assertEquals('Failed', result.Enrichment_Status__c);
+    }
+
+    @IsTest
+    static void testBulkEnrichment() {
+        Test.setMock(HttpCalloutMock.class, new CountryApiMock(200));
+
+        List<Account> accounts = new List<Account>();
+
+        for (Integer i = 0; i < 50; i++) {
+            accounts.add(new Account(
+                Name = 'Bulk Account ' + i,
+                BillingCountry = 'India'
+            ));
+        }
+
+        Test.startTest();
+        insert accounts;
+        Test.stopTest();
+
+        List<Account> results = [
+            SELECT Enrichment_Status__c, Country_Capital__c
+            FROM Account
+            WHERE Id IN :accounts
+        ];
+
+        System.assertEquals(50, results.size());
+
+        for (Account result : results) {
+            System.assertEquals('Success', result.Enrichment_Status__c);
+            System.assertEquals('New Delhi', result.Country_Capital__c);
+        }
+    }
+
+    @IsTest
+    static void testUpdateWithoutCountryChange() {
+        Account acc = new Account(
+            Name = 'Update Test Account'
+        );
+        insert acc;
+
+        Test.startTest();
+
+        acc.Name = 'Updated Account Name';
+        update acc;
+
+        System.assertEquals(
+            0,
+            Limits.getQueueableJobs(),
+            'No Queueable job should be created when BillingCountry is unchanged.'
+        );
+
+        Test.stopTest();
+    }
+}
