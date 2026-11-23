@@ -1,0 +1,92 @@
+public with sharing class AccountEnrichmentQueueable
+    implements Queueable, Database.AllowsCallouts {
+
+    private Set<Id> accountIds;
+
+    public AccountEnrichmentQueueable(Set<Id> accountIds) {
+        this.accountIds = accountIds;
+    }
+
+    public void execute(QueueableContext context) {
+
+        List<Account> accounts = [
+            SELECT Id, BillingCountry,
+                   Country_Capital__c,
+                   Country_Region__c,
+                   Country_Currency__c,
+                   Enrichment_Status__c
+            FROM Account
+            WHERE Id IN :accountIds
+        ];
+
+        Map<String, CountryApiService.CountryInfo> countryInfoMap =
+            new Map<String, CountryApiService.CountryInfo>();
+
+        Set<String> failedCountries = new Set<String>();
+
+        // Fetch country details only once per distinct country
+        for (Account acc : accounts) {
+
+            if (String.isBlank(acc.BillingCountry)) {
+                continue; 
+            }
+
+            String countryKey =
+                acc.BillingCountry.trim().toLowerCase();
+
+            if (!countryInfoMap.containsKey(countryKey)
+                && !failedCountries.contains(countryKey)) {
+
+                try {
+
+                    CountryApiService.CountryInfo info =
+                        CountryApiService.getCountry(acc.BillingCountry);
+
+                    if (info != null) {
+                        countryInfoMap.put(countryKey, info);
+                    } else {
+                        failedCountries.add(countryKey);
+                    }
+
+                } catch (Exception e) {
+
+                    failedCountries.add(countryKey);
+
+                    System.debug(
+                        'Country API Error: ' + e.getMessage()
+                    );
+                }
+            }
+        }
+
+        // Update Account records
+        for (Account acc : accounts) {
+
+            if (String.isBlank(acc.BillingCountry)) {
+                continue;
+            }
+
+            String countryKey =
+                acc.BillingCountry.trim().toLowerCase();
+
+            if (countryInfoMap.containsKey(countryKey)) {
+
+                CountryApiService.CountryInfo info =
+                    countryInfoMap.get(countryKey);
+
+                acc.Country_Capital__c = info.capital;
+                acc.Country_Region__c = info.region;
+                acc.Country_Currency__c = info.currencyDisplay;
+                acc.Enrichment_Status__c = 'Success';
+
+            } else {
+
+                acc.Enrichment_Status__c = 'Failed';
+            }
+        }
+
+        if (!accounts.isEmpty()) {
+            update accounts;
+        }
+    }
+}
