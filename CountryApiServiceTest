@@ -1,0 +1,73 @@
+@IsTest
+private class CountryApiServiceTest {
+
+    @IsTest
+    static void testSuccessfulResponse() { 
+
+        Test.setMock(
+            HttpCalloutMock.class,
+            new CountryApiMock(200)
+        );
+
+        Test.startTest();
+
+        CountryApiService.CountryInfo result =
+            CountryApiService.getCountry('India');
+
+        Test.stopTest();
+
+        System.assertNotEquals(null, result);
+        System.assertEquals('New Delhi', result.capital);
+        System.assertEquals('Asia', result.region);
+        System.assertEquals(
+            'INR - Indian rupee',
+            result.currencyDisplay
+        );
+    }
+
+    @IsTest
+    static void testNotFoundResponse() {
+
+        Test.setMock(
+            HttpCalloutMock.class,
+            new CountryApiMock(404)
+        );
+
+        Test.startTest();
+
+        CountryApiService.CountryInfo result =
+            CountryApiService.getCountry('Unknown');
+
+        Test.stopTest();
+
+        System.assertEquals(null, result);
+    }
+
+    @IsTest
+    static void testServerErrorResponse() {
+
+        Test.setMock(
+            HttpCalloutMock.class,
+            new CountryApiMock(500)
+        );
+
+        Boolean exceptionThrown = false;
+
+        Test.startTest();
+
+        try {
+            CountryApiService.getCountry('India');
+        }
+        catch (CountryApiService.CountryApiException e) {
+            exceptionThrown = true;
+        }
+
+        Test.stopTest();
+
+        System.assertEquals(
+            true,
+            exceptionThrown,
+            'Expected CountryApiException for HTTP 500'
+        );
+    }
+}
