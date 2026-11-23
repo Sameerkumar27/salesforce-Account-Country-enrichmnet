@@ -1,0 +1,114 @@
+public with sharing class CountryApiService {
+
+    public class CountryApiException extends Exception {}
+
+    public class CountryInfo {
+        public String capital;
+        public String region;
+        public String currencyDisplay;
+    }
+
+    public static CountryInfo getCountry(String countryName) {
+
+        Http http = new Http();
+        HttpRequest req = new HttpRequest();
+
+        String encodedCountry =
+            EncodingUtil.urlEncode(countryName, 'UTF-8');
+
+        String endpoint =
+            'https://api.restcountries.com/countries/v5/names.common/'
+            + encodedCountry; 
+
+        req.setEndpoint(endpoint);
+        req.setMethod('GET');
+        req.setHeader('Authorization', 'Your_APi_key');
+
+        HttpResponse res = http.send(req);
+
+        Integer statusCode = res.getStatusCode();
+
+        if (statusCode == 200) {
+
+            String resBody = res.getBody();
+
+            Object parsedData = JSON.deserializeUntyped(resBody);
+
+            Map<String, Object> responseData =
+                (Map<String, Object>) parsedData;
+
+            Map<String, Object> dataMap =
+                (Map<String, Object>) responseData.get('data');
+
+            List<Object> countryList =
+                (List<Object>) dataMap.get('objects');
+
+            if (countryList == null || countryList.isEmpty()) {
+                return null;
+            }
+
+            Map<String, Object> countryData =
+                (Map<String, Object>) countryList[0];
+
+            List<Object> capitalList =
+                (List<Object>) countryData.get('capitals');
+
+            String capital = '';
+
+            if (capitalList != null && !capitalList.isEmpty()) {
+
+                Map<String, Object> capitalDetails =
+                    (Map<String, Object>) capitalList[0];
+
+                capital = (String) capitalDetails.get('name');
+            }
+
+            String region =
+                (String) countryData.get('region');
+
+            Object currenciesData =
+                countryData.get('currencies');
+
+            String currencyDisplay = '';
+
+            if (currenciesData instanceof List<Object>) {
+
+                List<Object> currencyList =
+                    (List<Object>) currenciesData;
+
+                if (!currencyList.isEmpty()) {
+
+                    Map<String, Object> currencyDetails =
+                        (Map<String, Object>) currencyList[0];
+
+                    String currencyCode =
+                        (String) currencyDetails.get('code');
+
+                    String currencyName =
+                        (String) currencyDetails.get('name');
+
+                    currencyDisplay =
+                        currencyCode + ' - ' + currencyName;
+                }
+            }
+
+            CountryInfo info = new CountryInfo();
+
+            info.capital = capital;
+            info.region = region;
+            info.currencyDisplay = currencyDisplay;
+
+            return info;
+        }
+        else if (statusCode == 404) {
+
+            return null;
+        }
+        else {
+
+            throw new CountryApiException(
+                'API error: ' + statusCode
+            );
+        }
+    }
+}
