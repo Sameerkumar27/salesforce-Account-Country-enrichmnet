@@ -1,0 +1,42 @@
+@IsTest
+global class CountryApiMock implements HttpCalloutMock {
+
+    global Integer statusCode;
+
+    global CountryApiMock(Integer statusCode) {
+        this.statusCode = statusCode;
+    }
+
+    global HTTPResponse respond(HTTPRequest req) {
+
+        HttpResponse res = new HttpResponse();
+
+        res.setStatusCode(statusCode);
+        res.setHeader('Content-Type', 'application/json');
+
+        if (statusCode == 200) {
+
+            res.setBody(
+                '{"data":{"objects":[{"names":{"common":"India"},' +
+                '"capitals":[{"name":"New Delhi"}],' +
+                '"region":"Asia",' +
+                '"currencies":[{"code":"INR",' +
+                '"name":"Indian rupee","symbol":"₹"}]}]}}'
+            );
+
+        } else if (statusCode == 404) {
+
+            res.setBody(
+                '{"message":"Country not found"}'
+            ); 
+
+        } else {
+
+            res.setBody(
+                '{"message":"Internal server error"}'
+            );
+        }
+
+        return res;
+    }
+}
