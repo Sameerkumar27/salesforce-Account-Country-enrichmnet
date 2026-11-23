@@ -1,0 +1,21 @@
+trigger AccountTrigger on Account (after insert, after update) {
+
+    if (Trigger.isAfter) {
+
+        if (Trigger.isInsert) {
+
+            AccountEnrichmentHandler.handleAccounts( 
+                Trigger.new,
+                null
+            );
+        }
+
+        if (Trigger.isUpdate) {
+
+            AccountEnrichmentHandler.handleAccounts(
+                Trigger.new,
+                Trigger.oldMap
+            );
+        }
+    }
+}
